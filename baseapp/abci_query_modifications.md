@@ -1,10 +1,12 @@
 # Minimal Query Optimization Modifications
 
 ## Solution 1: Quick Fix - Always Use Committed State (RECOMMENDED)
+
 **File:** `baseapp/abci.go`
 **Function:** `CreateQueryContextWithCheckHeader` (line ~1208)
 
 ### Change:
+
 Replace lines 1240-1270 with:
 
 ```go
@@ -43,7 +45,7 @@ func (app *BaseApp) CreateQueryContextWithCheckHeader(height int64, prove, check
 	// SOLUTION 1: Skip state checking for latest queries - always use committed state
 	var header *cmtproto.Header
 	isLatest := height == 0
-	
+
 	if isLatest {
 		// Force use of committed state only - skip checking finalizeBlockState
 		height = lastBlockHeight
@@ -90,21 +92,23 @@ func (app *BaseApp) CreateQueryContextWithCheckHeader(height int64, prove, check
 ---
 
 ## Solution 2: Add Configuration Flag
+
 **File:** `baseapp/baseapp.go`
 **Add to BaseApp struct (line ~64):**
 
 ```go
 type BaseApp struct {
 	// ... existing fields ...
-	
+
 	// SOLUTION 2: Add query configuration
 	fastQueries bool // Skip in-progress state for queries when true
-	
+
 	// ... rest of fields
 }
 ```
 
 **Add option function (at end of file):**
+
 ```go
 // SetFastQueries enables fast query mode that always uses committed state
 func SetFastQueries() func(*BaseApp) {
@@ -115,6 +119,7 @@ func SetFastQueries() func(*BaseApp) {
 ```
 
 **Modify `CreateQueryContextWithCheckHeader`:**
+
 ```go
 // Around line 1240, modify the isLatest handling:
 isLatest := height == 0
@@ -147,13 +152,14 @@ if isLatest && app.fastQueries {
 ---
 
 ## Solution 3: Async Query Store (More Complex)
+
 **File:** `baseapp/baseapp.go`
 **Add to BaseApp struct:**
 
 ```go
 type BaseApp struct {
 	// ... existing fields ...
-	
+
 	// SOLUTION 3: Dedicated query store updated async
 	qmsCommitted      storetypes.MultiStore // Committed state for queries
 	qmsCommittedMutex sync.RWMutex          // Protect qmsCommitted
@@ -166,23 +172,24 @@ type BaseApp struct {
 ```go
 func (app *BaseApp) Commit() (*abci.ResponseCommit, error) {
 	// ... existing commit logic ...
-	
+
 	// SOLUTION 3: Update dedicated query store (async)
 	go func() {
 		app.qmsCommittedMutex.Lock()
 		defer app.qmsCommittedMutex.Unlock()
-		
+
 		// Update query store to latest committed
 		if ms, err := app.cms.CacheMultiStoreWithVersion(app.cms.LatestVersion()); err == nil {
 			app.qmsCommitted = ms
 		}
 	}()
-	
+
 	return res, nil
 }
 ```
 
 **Modify `CreateQueryContextWithCheckHeader`:**
+
 ```go
 // Use dedicated query store if available
 qms := app.qms
@@ -193,7 +200,7 @@ if qms == nil {
 		qms = app.qmsCommitted
 	}
 	app.qmsCommittedMutex.RUnlock()
-	
+
 	if qms == nil {
 		qms = app.cms.(storetypes.MultiStore)
 	}
@@ -203,13 +210,14 @@ if qms == nil {
 ---
 
 ## Solution 4: Simple Query Cache
+
 **File:** `baseapp/baseapp.go`
 **Add simple cache to BaseApp:**
 
 ```go
 type BaseApp struct {
 	// ... existing fields ...
-	
+
 	// SOLUTION 4: Simple query cache
 	queryCache     map[string][]byte
 	queryCacheMutex sync.RWMutex
@@ -234,7 +242,7 @@ func (app *BaseApp) handleQueryGRPC(handler GRPCQueryHandler, req *abci.RequestQ
 		}
 		app.queryCacheMutex.RUnlock()
 	}
-	
+
 	ctx, err := app.CreateQueryContext(req.Height, req.Prove)
 	if err != nil {
 		return sdkerrors.QueryResult(err, app.trace)
@@ -246,7 +254,7 @@ func (app *BaseApp) handleQueryGRPC(handler GRPCQueryHandler, req *abci.RequestQ
 		resp.Height = req.Height
 		return resp
 	}
-	
+
 	// SOLUTION 4: Cache successful latest queries
 	if req.Height == 0 && app.queryCache != nil && err == nil {
 		app.queryCacheMutex.Lock()
@@ -259,6 +267,7 @@ func (app *BaseApp) handleQueryGRPC(handler GRPCQueryHandler, req *abci.RequestQ
 ```
 
 **In `Commit`, clear cache:**
+
 ```go
 // SOLUTION 4: Clear query cache on commit
 if app.queryCache != nil {
@@ -295,7 +304,7 @@ If you want the absolute minimal change, just modify `baseapp/abci.go` line ~124
 - 	}
 + 	var header *cmtproto.Header
 + 	isLatest := height == 0
-+ 	
++
 + 	// SOLUTION 1: For latest queries, always use committed state
 + 	if isLatest {
 + 		height = lastBlockHeight

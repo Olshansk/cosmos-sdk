@@ -10,8 +10,8 @@ This document describes `BaseApp`, the abstraction that implements the core func
 
 :::note Pre-requisite Readings
 
-* [Anatomy of a Cosmos SDK application](../beginner/00-app-anatomy.md)
-* [Lifecycle of a Cosmos SDK transaction](../beginner/01-tx-lifecycle.md)
+- [Anatomy of a Cosmos SDK application](../beginner/00-app-anatomy.md)
+- [Lifecycle of a Cosmos SDK transaction](../beginner/01-tx-lifecycle.md)
 
 :::
 
@@ -19,9 +19,9 @@ This document describes `BaseApp`, the abstraction that implements the core func
 
 `BaseApp` is a base type that implements the core of a Cosmos SDK application, namely:
 
-* The [Application Blockchain Interface](#main-abci-messages), for the state-machine to communicate with the underlying consensus engine (e.g. CometBFT).
-* [Service Routers](#service-routers), to route messages and queries to the appropriate module.
-* Different [states](#state-updates), as the state-machine can have different volatile states updated based on the ABCI message received.
+- The [Application Blockchain Interface](#main-abci-messages), for the state-machine to communicate with the underlying consensus engine (e.g. CometBFT).
+- [Service Routers](#service-routers), to route messages and queries to the appropriate module.
+- Different [states](#state-updates), as the state-machine can have different volatile states updated based on the ABCI message received.
 
 The goal of `BaseApp` is to provide the fundamental layer of a Cosmos SDK application
 that developers can easily extend to build their own custom application. Usually,
@@ -60,50 +60,50 @@ Let us go through the most important components.
 
 First, the important parameters that are initialized during the bootstrapping of the application:
 
-* [`CommitMultiStore`](./04-store.md#commitmultistore): This is the main store of the application,
+- [`CommitMultiStore`](./04-store.md#commitmultistore): This is the main store of the application,
   which holds the canonical state that is committed at the [end of each block](#commit). This store
   is **not** cached, meaning it is not used to update the application's volatile (un-committed) states.
   The `CommitMultiStore` is a multi-store, meaning a store of stores. Each module of the application
   uses one or multiple `KVStores` in the multi-store to persist their subset of the state.
-* Database: The `db` is used by the `CommitMultiStore` to handle data persistence.
-* [`Msg` Service Router](#msg-service-router): The `msgServiceRouter` facilitates the routing of `sdk.Msg` requests to the appropriate
+- Database: The `db` is used by the `CommitMultiStore` to handle data persistence.
+- [`Msg` Service Router](#msg-service-router): The `msgServiceRouter` facilitates the routing of `sdk.Msg` requests to the appropriate
   module `Msg` service for processing. Here a `sdk.Msg` refers to the transaction component that needs to be
   processed by a service in order to update the application state, and not to ABCI message which implements
   the interface between the application and the underlying consensus engine.
-* [gRPC Query Router](#grpc-query-router): The `grpcQueryRouter` facilitates the routing of gRPC queries to the
+- [gRPC Query Router](#grpc-query-router): The `grpcQueryRouter` facilitates the routing of gRPC queries to the
   appropriate module for it to be processed. These queries are not ABCI messages themselves, but they
   are relayed to the relevant module's gRPC `Query` service.
-* [`TxDecoder`](https://pkg.go.dev/github.com/cosmos/cosmos-sdk/types#TxDecoder): It is used to decode
+- [`TxDecoder`](https://pkg.go.dev/github.com/cosmos/cosmos-sdk/types#TxDecoder): It is used to decode
   raw transaction bytes relayed by the underlying CometBFT engine.
-* [`AnteHandler`](#antehandler): This handler is used to handle signature verification, fee payment,
+- [`AnteHandler`](#antehandler): This handler is used to handle signature verification, fee payment,
   and other pre-message execution checks when a transaction is received. It's executed during
   [`CheckTx/RecheckTx`](#checktx) and [`FinalizeBlock`](#finalizeblock).
-* [`InitChainer`](../beginner/00-app-anatomy.md#initchainer), [`PreBlocker`](../beginner/00-app-anatomy.md#preblocker), [`BeginBlocker` and `EndBlocker`](../beginner/00-app-anatomy.md#beginblocker-and-endblocker): These are
+- [`InitChainer`](../beginner/00-app-anatomy.md#initchainer), [`PreBlocker`](../beginner/00-app-anatomy.md#preblocker), [`BeginBlocker` and `EndBlocker`](../beginner/00-app-anatomy.md#beginblocker-and-endblocker): These are
   the functions executed when the application receives the `InitChain` and `FinalizeBlock`
   ABCI messages from the underlying CometBFT engine.
 
 Then, parameters used to define [volatile states](#state-updates) (i.e. cached states):
 
-* `checkState`: This state is updated during [`CheckTx`](#checktx), and reset on [`Commit`](#commit).
-* `finalizeBlockState`: This state is updated during [`FinalizeBlock`](#finalizeblock), and set to `nil` on
+- `checkState`: This state is updated during [`CheckTx`](#checktx), and reset on [`Commit`](#commit).
+- `finalizeBlockState`: This state is updated during [`FinalizeBlock`](#finalizeblock), and set to `nil` on
   [`Commit`](#commit) and gets re-initialized on `FinalizeBlock`.
-* `processProposalState`: This state is updated during [`ProcessProposal`](#process-proposal).
-* `prepareProposalState`: This state is updated during [`PrepareProposal`](#prepare-proposal).
+- `processProposalState`: This state is updated during [`ProcessProposal`](#process-proposal).
+- `prepareProposalState`: This state is updated during [`PrepareProposal`](#prepare-proposal).
 
 Finally, a few more important parameters:
 
-* `voteInfos`: This parameter carries the list of validators whose precommit is missing, either
+- `voteInfos`: This parameter carries the list of validators whose precommit is missing, either
   because they did not vote or because the proposer did not include their vote. This information is
   carried by the [Context](./02-context.md) and can be used by the application for various things like
   punishing absent validators.
-* `minGasPrices`: This parameter defines the minimum gas prices accepted by the node. This is a
+- `minGasPrices`: This parameter defines the minimum gas prices accepted by the node. This is a
   **local** parameter, meaning each full-node can set a different `minGasPrices`. It is used in the
   `AnteHandler` during [`CheckTx`](#checktx), mainly as a spam protection mechanism. The transaction
   enters the [mempool](https://github.com/cometbft/cometbft/blob/v0.37.x/spec/abci/abci++_basic_concepts.md#mempool-methods)
   only if the gas prices of the transaction are greater than one of the minimum gas price in
   `minGasPrices` (e.g. if `minGasPrices == 1uatom,1photon`, the `gas-price` of the transaction must be
   greater than `1uatom` OR `1photon`).
-* `appVersion`: Version of the application. It is set in the
+- `appVersion`: Version of the application. It is set in the
   [application's constructor function](../beginner/00-app-anatomy.md#constructor-function).
 
 ## Constructor
@@ -139,8 +139,8 @@ The types can be illustrated as follows:
 
 ### InitChain State Updates
 
-During `InitChain`, the four volatile states, `checkState`, `prepareProposalState`, `processProposalState` 
-and `finalizeBlockState` are set by branching the root `CommitMultiStore`. Any subsequent reads and writes happen 
+During `InitChain`, the four volatile states, `checkState`, `prepareProposalState`, `processProposalState`
+and `finalizeBlockState` are set by branching the root `CommitMultiStore`. Any subsequent reads and writes happen
 on branched versions of the `CommitMultiStore`.
 To avoid unnecessary roundtrip to the main state, all reads to the branched store are cached.
 
@@ -159,23 +159,23 @@ This has the side effect that if the `AnteHandler` fails, the state transitions 
 
 ### PrepareProposal State Updates
 
-During `PrepareProposal`, the `prepareProposalState` is set by branching the root `CommitMultiStore`. 
+During `PrepareProposal`, the `prepareProposalState` is set by branching the root `CommitMultiStore`.
 The `prepareProposalState` is used for any reads and writes that occur during the `PrepareProposal` phase.
 The function uses the `Select()` method of the mempool to iterate over the transactions. `runTx` is then called,
-which encodes and validates each transaction and from there the `AnteHandler` is executed. 
-If successful, valid transactions are returned inclusive of the events, tags, and data generated 
-during the execution of the proposal. 
-The described behavior is that of the default handler, applications have the flexibility to define their own 
+which encodes and validates each transaction and from there the `AnteHandler` is executed.
+If successful, valid transactions are returned inclusive of the events, tags, and data generated
+during the execution of the proposal.
+The described behavior is that of the default handler, applications have the flexibility to define their own
 [custom mempool handlers](https://docs.cosmos.network/main/building-apps/app-mempool#custom-mempool-handlers).
 
 ![ProcessProposal](./baseapp_state-prepareproposal.png)
 
 ### ProcessProposal State Updates
 
-During `ProcessProposal`, the `processProposalState` is set based off of the last committed state 
+During `ProcessProposal`, the `processProposalState` is set based off of the last committed state
 from the root store and is used to process a signed proposal received from a validator.
-In this state, `runTx` is called and the `AnteHandler` is executed and the context used in this state is built with information 
-from the header and the main state, including the minimum gas prices, which are also set. 
+In this state, `runTx` is called and the `AnteHandler` is executed and the context used in this state is built with information
+from the header and the main state, including the minimum gas prices, which are also set.
 Again we want to highlight that the described behavior is that of the default handler and applications have the flexibility to define their own
 [custom mempool handlers](https://docs.cosmos.network/main/building-apps/app-mempool#custom-mempool-handlers).
 
@@ -208,7 +208,7 @@ During `InitChain`, the `RequestInitChain` provides `ConsensusParams` which cont
 related to block execution such as maximum gas and size in addition to evidence parameters. If these
 parameters are non-nil, they are set in the BaseApp's `ParamStore`. Behind the scenes, the `ParamStore`
 is managed by an `x/consensus_params` module. This allows the parameters to be tweaked via
- on-chain governance.
+on-chain governance.
 
 ## Service Routers
 
@@ -216,7 +216,7 @@ When messages and queries are received by the application, they must be routed t
 
 ### `Msg` Service Router
 
-[`sdk.Msg`s](../../build/building-modules/02-messages-and-queries.md#messages) need to be routed after they are extracted from transactions, which are sent from the underlying CometBFT engine via the [`CheckTx`](#checktx) and [`FinalizeBlock`](#finalizeblock) ABCI messages. To do so, `BaseApp` holds a `msgServiceRouter` which maps fully-qualified service methods (`string`, defined in each module's Protobuf  `Msg` service) to the appropriate module's `MsgServer` implementation.
+[`sdk.Msg`s](../../build/building-modules/02-messages-and-queries.md#messages) need to be routed after they are extracted from transactions, which are sent from the underlying CometBFT engine via the [`CheckTx`](#checktx) and [`FinalizeBlock`](#finalizeblock) ABCI messages. To do so, `BaseApp` holds a `msgServiceRouter` which maps fully-qualified service methods (`string`, defined in each module's Protobuf `Msg` service) to the appropriate module's `MsgServer` implementation.
 
 The [default `msgServiceRouter` included in `BaseApp`](https://github.com/cosmos/cosmos-sdk/blob/v0.53.0/baseapp/msg_service_router.go) is stateless. However, some applications may want to make use of more stateful routing mechanisms such as allowing governance to disable certain routes or point them to new modules for upgrade purposes. For this reason, the `sdk.Context` is also passed into each [route handler inside `msgServiceRouter`](https://github.com/cosmos/cosmos-sdk/blob/v0.53.0/baseapp/msg_service_router.go#L35-L36). For a stateless router that doesn't want to make use of this, you can just ignore the `ctx`.
 
@@ -234,20 +234,19 @@ The [Application-Blockchain Interface](https://github.com/cometbft/cometbft/blob
 
 The consensus engine handles two main tasks:
 
-* The networking logic, which mainly consists in gossiping block parts, transactions and consensus votes.
-* The consensus logic, which results in the deterministic ordering of transactions in the form of blocks.
+- The networking logic, which mainly consists in gossiping block parts, transactions and consensus votes.
+- The consensus logic, which results in the deterministic ordering of transactions in the form of blocks.
 
 It is **not** the role of the consensus engine to define the state or the validity of transactions. Generally, transactions are handled by the consensus engine in the form of `[]bytes`, and relayed to the application via the ABCI to be decoded and processed. At keys moments in the networking and consensus processes (e.g. beginning of a block, commit of a block, reception of an unconfirmed transaction, ...), the consensus engine emits ABCI messages for the state-machine to act on.
 
 Developers building on top of the Cosmos SDK need not implement the ABCI themselves, as `BaseApp` comes with a built-in implementation of the interface. Let us go through the main ABCI messages that `BaseApp` implements:
 
-* [`Prepare Proposal`](#prepare-proposal)
-* [`Process Proposal`](#process-proposal)
-* [`CheckTx`](#checktx)
-* [`FinalizeBlock`](#finalizeblock)
-* [`ExtendVote`](#extendvote)
-* [`VerifyVoteExtension`](#verifyvoteextension)
-
+- [`Prepare Proposal`](#prepare-proposal)
+- [`Process Proposal`](#process-proposal)
+- [`CheckTx`](#checktx)
+- [`FinalizeBlock`](#finalizeblock)
+- [`ExtendVote`](#extendvote)
+- [`VerifyVoteExtension`](#verifyvoteextension)
 
 ### Prepare Proposal
 
@@ -266,11 +265,10 @@ It's important to note that `PrepareProposal` complements the `ProcessProposal` 
 
 `PrepareProposal` returns a response to the underlying consensus engine of type [`abci.ResponseCheckTx`](https://github.com/cometbft/cometbft/blob/v0.37.x/spec/abci/abci++_methods.md#processproposal). The response contains:
 
-*   `Code (uint32)`: Response Code. `0` if successful.
-*   `Data ([]byte)`: Result bytes, if any.
-*   `Log (string):` The output of the application's logger. May be non-deterministic.
-*   `Info (string):` Additional information. May be non-deterministic.
-
+- `Code (uint32)`: Response Code. `0` if successful.
+- `Data ([]byte)`: Result bytes, if any.
+- `Log (string):` The output of the application's logger. May be non-deterministic.
+- `Info (string):` Additional information. May be non-deterministic.
 
 ### Process Proposal
 
@@ -293,11 +291,10 @@ However, developers must exercise greater caution when using these methods. Inco
 
 `ProcessProposal` returns a response to the underlying consensus engine of type [`abci.ResponseCheckTx`](https://github.com/cometbft/cometbft/blob/v0.37.x/spec/abci/abci++_methods.md#processproposal). The response contains:
 
-*   `Code (uint32)`: Response Code. `0` if successful.
-*   `Data ([]byte)`: Result bytes, if any.
-*   `Log (string):` The output of the application's logger. May be non-deterministic.
-*   `Info (string):` Additional information. May be non-deterministic.
-
+- `Code (uint32)`: Response Code. `0` if successful.
+- `Data ([]byte)`: Result bytes, if any.
+- `Log (string):` The output of the application's logger. May be non-deterministic.
+- `Info (string):` Additional information. May be non-deterministic.
 
 ### CheckTx
 
@@ -307,7 +304,7 @@ transaction is received by a full-node. The role of `CheckTx` is to guard the fu
 Unconfirmed transactions are relayed to peers only if they pass `CheckTx`.
 
 `CheckTx()` can perform both _stateful_ and _stateless_ checks, but developers should strive to
-make the checks **lightweight** because gas fees are not charged for the resources (CPU, data load...) used during the `CheckTx`. 
+make the checks **lightweight** because gas fees are not charged for the resources (CPU, data load...) used during the `CheckTx`.
 
 In the Cosmos SDK, after [decoding transactions](./05-encoding.md), `CheckTx()` is implemented
 to do the following checks:
@@ -324,7 +321,7 @@ to do the following checks:
    with the transaction is superior to a minimum reference gas amount based on the raw transaction size,
    in order to avoid spam with transactions that provide 0 gas.
 
-`CheckTx` does **not** process `sdk.Msg`s -  they only need to be processed when the canonical state needs to be updated, which happens during `FinalizeBlock`.
+`CheckTx` does **not** process `sdk.Msg`s - they only need to be processed when the canonical state needs to be updated, which happens during `FinalizeBlock`.
 
 Steps 2. and 3. are performed by the [`AnteHandler`](../beginner/04-gas-fees.md#antehandler) in the [`RunTx()`](#runtx-antehandler-and-runmsgs)
 function, which `CheckTx()` calls with the `runTxModeCheck` mode. During each step of `CheckTx()`, a
@@ -341,19 +338,19 @@ is actually included in a block, because `checkState` never gets committed to th
 `CheckTx` returns a response to the underlying consensus engine of type [`abci.ResponseCheckTx`](https://github.com/cometbft/cometbft/blob/v0.37.x/spec/abci/abci++_methods.md#checktx).
 The response contains:
 
-* `Code (uint32)`: Response Code. `0` if successful.
-* `Data ([]byte)`: Result bytes, if any.
-* `Log (string):` The output of the application's logger. May be non-deterministic.
-* `Info (string):` Additional information. May be non-deterministic.
-* `GasWanted (int64)`: Amount of gas requested for transaction. It is provided by users when they generate the transaction.
-* `GasUsed (int64)`: Amount of gas consumed by transaction. During `CheckTx`, this value is computed by multiplying the standard cost of a transaction byte by the size of the raw transaction. Next is an example:
+- `Code (uint32)`: Response Code. `0` if successful.
+- `Data ([]byte)`: Result bytes, if any.
+- `Log (string):` The output of the application's logger. May be non-deterministic.
+- `Info (string):` Additional information. May be non-deterministic.
+- `GasWanted (int64)`: Amount of gas requested for transaction. It is provided by users when they generate the transaction.
+- `GasUsed (int64)`: Amount of gas consumed by transaction. During `CheckTx`, this value is computed by multiplying the standard cost of a transaction byte by the size of the raw transaction. Next is an example:
 
 ```go reference
 https://github.com/cosmos/cosmos-sdk/blob/v0.53.0/x/auth/ante/basic.go#L104
 ```
 
-* `Events ([]cmn.KVPair)`: Key-Value tags for filtering and indexing transactions (eg. by account). See [`event`s](./08-events.md) for more.
-* `Codespace (string)`: Namespace for the Code.
+- `Events ([]cmn.KVPair)`: Key-Value tags for filtering and indexing transactions (eg. by account). See [`event`s](./08-events.md) for more.
+- `Codespace (string)`: Namespace for the Code.
 
 #### RecheckTx
 
@@ -394,9 +391,9 @@ https://github.com/cosmos/cosmos-sdk/blob/v0.53.0/types/handler.go#L3-L5
 
 The `AnteHandler` is theoretically optional, but still a very important component of public blockchain networks. It serves 3 primary purposes:
 
-* Be a primary line of defense against spam and second line of defense (the first one being the mempool) against transaction replay with fees deduction and [`sequence`](./01-transactions.md#transaction-generation) checking.
-* Perform preliminary _stateful_ validity checks like ensuring signatures are valid or that the sender has enough funds to pay for fees.
-* Play a role in the incentivisation of stakeholders via the collection of transaction fees.
+- Be a primary line of defense against spam and second line of defense (the first one being the mempool) against transaction replay with fees deduction and [`sequence`](./01-transactions.md#transaction-generation) checking.
+- Perform preliminary _stateful_ validity checks like ensuring signatures are valid or that the sender has enough funds to pay for fees.
+- Play a role in the incentivisation of stakeholders via the collection of transaction fees.
 
 `BaseApp` holds an `anteHandler` as parameter that is initialized in the [application's constructor](../beginner/00-app-anatomy.md#application-constructor). The most widely used `anteHandler` is the [`auth` module](https://github.com/cosmos/cosmos-sdk/blob/v0.53.0/x/auth/ante/ante.go).
 
@@ -428,39 +425,37 @@ Note, when `PostHandler`s fail, the state from `runMsgs` is also reverted, effec
 
 The [`InitChain` ABCI message](https://github.com/cometbft/cometbft/blob/v0.37.x/spec/abci/abci++_basic_concepts.md#method-overview) is sent from the underlying CometBFT engine when the chain is first started. It is mainly used to **initialize** parameters and state like:
 
-* [Consensus Parameters](https://github.com/cometbft/cometbft/blob/v0.37.x/spec/abci/abci++_app_requirements.md#consensus-parameters) via `setConsensusParams`.
-* [`checkState` and `finalizeBlockState`](#state-updates) via `setState`.
-* The [block gas meter](../beginner/04-gas-fees.md#block-gas-meter), with infinite gas to process genesis transactions.
+- [Consensus Parameters](https://github.com/cometbft/cometbft/blob/v0.37.x/spec/abci/abci++_app_requirements.md#consensus-parameters) via `setConsensusParams`.
+- [`checkState` and `finalizeBlockState`](#state-updates) via `setState`.
+- The [block gas meter](../beginner/04-gas-fees.md#block-gas-meter), with infinite gas to process genesis transactions.
 
 Finally, the `InitChain(req abci.RequestInitChain)` method of `BaseApp` calls the [`initChainer()`](../beginner/00-app-anatomy.md#initchainer) of the application in order to initialize the main state of the application from the `genesis file` and, if defined, call the [`InitGenesis`](../../build/building-modules/08-genesis.md#initgenesis) function of each of the application's modules.
-
 
 ### FinalizeBlock
 
 The [`FinalizeBlock` ABCI message](https://github.com/cometbft/cometbft/blob/v0.38.x/spec/abci/abci++_basic_concepts.md#method-overview) is sent from the underlying CometBFT engine when a block proposal created by the correct proposer is received. The previous `BeginBlock, DeliverTx and Endblock` calls are private methods on the BaseApp struct.
 
-
-```go reference 
+```go reference
 https://github.com/cosmos/cosmos-sdk/blob/v0.53.0/baseapp/abci.go#L869
 ```
 
-#### PreBlock 
+#### PreBlock
 
-* Run the application's [`preBlocker()`](../beginner/00-app-anatomy.md#preblocker), which mainly runs the [`PreBlocker()`](../../build/building-modules/17-preblock.md#preblock) method of each of the modules.
+- Run the application's [`preBlocker()`](../beginner/00-app-anatomy.md#preblocker), which mainly runs the [`PreBlocker()`](../../build/building-modules/17-preblock.md#preblock) method of each of the modules.
 
-#### BeginBlock 
+#### BeginBlock
 
-* Initialize [`finalizeBlockState`](#state-updates) with the latest header using the `req abci.RequestFinalizeBlock` passed as parameter via the `setState` function.
+- Initialize [`finalizeBlockState`](#state-updates) with the latest header using the `req abci.RequestFinalizeBlock` passed as parameter via the `setState` function.
 
   ```go reference
   https://github.com/cosmos/cosmos-sdk/blob/v0.53.0/baseapp/baseapp.go#L746-L770
   ```
-  
+
   This function also resets the [main gas meter](../beginner/04-gas-fees.md#main-gas-meter).
 
-* Initialize the [block gas meter](../beginner/04-gas-fees.md#block-gas-meter) with the `maxGas` limit. The `gas` consumed within the block cannot go above `maxGas`. This parameter is defined in the application's consensus parameters.
-* Run the application's [`beginBlocker()`](../beginner/00-app-anatomy.md#beginblocker-and-endblocker), which mainly runs the [`BeginBlocker()`](../../build/building-modules/06-beginblock-endblock.md#beginblock) method of each of the modules.
-* Set the [`VoteInfos`](https://github.com/cometbft/cometbft/blob/v0.37.x/spec/abci/abci++_methods.md#voteinfo) of the application, i.e. the list of validators whose _precommit_ for the previous block was included by the proposer of the current block. This information is carried into the [`Context`](./02-context.md) so that it can be used during transaction execution and EndBlock.
+- Initialize the [block gas meter](../beginner/04-gas-fees.md#block-gas-meter) with the `maxGas` limit. The `gas` consumed within the block cannot go above `maxGas`. This parameter is defined in the application's consensus parameters.
+- Run the application's [`beginBlocker()`](../beginner/00-app-anatomy.md#beginblocker-and-endblocker), which mainly runs the [`BeginBlocker()`](../../build/building-modules/06-beginblock-endblock.md#beginblock) method of each of the modules.
+- Set the [`VoteInfos`](https://github.com/cometbft/cometbft/blob/v0.37.x/spec/abci/abci++_methods.md#voteinfo) of the application, i.e. the list of validators whose _precommit_ for the previous block was included by the proposer of the current block. This information is carried into the [`Context`](./02-context.md) so that it can be used during transaction execution and EndBlock.
 
 #### Transaction Execution
 
@@ -487,20 +482,20 @@ At any point, if `GasConsumed > GasWanted`, the function returns with `Code != 0
 
 Each transactions returns a response to the underlying consensus engine of type [`abci.ExecTxResult`](https://github.com/cometbft/cometbft/blob/v0.38.0-rc1/spec/abci/abci%2B%2B_methods.md#exectxresult). The response contains:
 
-* `Code (uint32)`: Response Code. `0` if successful.
-* `Data ([]byte)`: Result bytes, if any.
-* `Log (string):` The output of the application's logger. May be non-deterministic.
-* `Info (string):` Additional information. May be non-deterministic.
-* `GasWanted (int64)`: Amount of gas requested for transaction. It is provided by users when they generate the transaction.
-* `GasUsed (int64)`: Amount of gas consumed by transaction. During transaction execution, this value is computed by multiplying the standard cost of a transaction byte by the size of the raw transaction, and by adding gas each time a read/write to the store occurs.
-* `Events ([]cmn.KVPair)`: Key-Value tags for filtering and indexing transactions (eg. by account). See [`event`s](./08-events.md) for more.
-* `Codespace (string)`: Namespace for the Code.
+- `Code (uint32)`: Response Code. `0` if successful.
+- `Data ([]byte)`: Result bytes, if any.
+- `Log (string):` The output of the application's logger. May be non-deterministic.
+- `Info (string):` Additional information. May be non-deterministic.
+- `GasWanted (int64)`: Amount of gas requested for transaction. It is provided by users when they generate the transaction.
+- `GasUsed (int64)`: Amount of gas consumed by transaction. During transaction execution, this value is computed by multiplying the standard cost of a transaction byte by the size of the raw transaction, and by adding gas each time a read/write to the store occurs.
+- `Events ([]cmn.KVPair)`: Key-Value tags for filtering and indexing transactions (eg. by account). See [`event`s](./08-events.md) for more.
+- `Codespace (string)`: Namespace for the Code.
 
-#### EndBlock 
+#### EndBlock
 
 EndBlock is run after transaction execution completes. It allows developers to have logic be executed at the end of each block. In the Cosmos SDK, the bulk EndBlock() method is to run the application's EndBlocker(), which mainly runs the EndBlocker() method of each of the application's modules.
 
-```go reference 
+```go reference
 https://github.com/cosmos/cosmos-sdk/blob/v0.53.0/baseapp/baseapp.go#L811-L833
 ```
 
@@ -522,9 +517,9 @@ The [`Query` ABCI message](https://github.com/cometbft/cometbft/blob/v0.37.x/spe
 
 Each CometBFT `query` comes with a `path`, which is a `string` which denotes what to query. If the `path` matches a gRPC fully-qualified service method, then `BaseApp` will defer the query to the `grpcQueryRouter` and let it handle it like explained [above](#grpc-query-router). Otherwise, the `path` represents a query that is not (yet) handled by the gRPC router. `BaseApp` splits the `path` string with the `/` delimiter. By convention, the first element of the split string (`split[0]`) contains the category of `query` (`app`, `p2p`, `store` or `custom` ). The `BaseApp` implementation of the `Query(req abci.RequestQuery)` method is a simple dispatcher serving these 4 main categories of queries:
 
-* Application-related queries like querying the application's version, which are served via the `handleQueryApp` method.
-* Direct queries to the multistore, which are served by the `handlerQueryStore` method. These direct queries are different from custom queries which go through `app.queryRouter`, and are mainly used by third-party service provider like block explorers.
-* P2P queries, which are served via the `handleQueryP2P` method. These queries return either `app.addrPeerFilter` or `app.ipPeerFilter` that contain the list of peers filtered by address or IP respectively. These lists are first initialized via `options` in `BaseApp`'s [constructor](#constructor).
+- Application-related queries like querying the application's version, which are served via the `handleQueryApp` method.
+- Direct queries to the multistore, which are served by the `handlerQueryStore` method. These direct queries are different from custom queries which go through `app.queryRouter`, and are mainly used by third-party service provider like block explorers.
+- P2P queries, which are served via the `handleQueryP2P` method. These queries return either `app.addrPeerFilter` or `app.ipPeerFilter` that contain the list of peers filtered by address or IP respectively. These lists are first initialized via `options` in `BaseApp`'s [constructor](#constructor).
 
 ### ExtendVote
 
@@ -532,7 +527,7 @@ Each CometBFT `query` comes with a `path`, which is a `string` which denotes wha
 
 In the Cosmos-SDK this is implemented as a NoOp:
 
-``` go reference 
+```go reference
 https://github.com/cosmos/cosmos-sdk/blob/v0.53.0/baseapp/abci_utils.go#L444-L450
 ```
 
